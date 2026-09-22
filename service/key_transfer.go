@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
@@ -196,8 +197,20 @@ func (svc service) TransferKeyWithEvidence(ctx context.Context, req TransferKeyR
 	}
 
 	tokenClaims := claims.(*model.AttestationTokenClaim)
+	userData := tokenClaims.AttesterHeldData
+	if userData == "" {
+		logrus.Info("attester_held_data is empty, falling back to attester_user_data")
+		logrus.Infof("attester_user_data type: %T\n", reflect.TypeOf(tokenClaims.AttesterUserData))
+		logrus.Infof("attester_user_data value: %v\n", tokenClaims.AttesterUserData)
+		ud, ok := tokenClaims.AttesterUserData.(string)
+		if !ok {
+			logrus.Error("attester_user_data is not a string")
+			return nil, &HandledError{Code: http.StatusUnauthorized, Message: "attester_user_data is not a string"}
+		}
+		userData = ud
+	}
 
-	transferResponse, httpStatus, err := svc.validateClaimsAndGetKey(tokenClaims, transferPolicy, key.KeyInfo.Algorithm, tokenClaims.AttesterHeldData, req.KeyId)
+	transferResponse, httpStatus, err := svc.validateClaimsAndGetKey(tokenClaims, transferPolicy, key.KeyInfo.Algorithm, userData, req.KeyId)
 	if err != nil {
 		return nil, &HandledError{Code: httpStatus, Message: err.Error()}
 	}
